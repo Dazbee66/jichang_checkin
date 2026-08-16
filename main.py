@@ -1,14 +1,10 @@
-import requests, json, os
+import requests, json, os, re
 from urllib.parse import unquote
 
 session = requests.session()
-# 机场的地址
 url = os.environ.get('URL', '').rstrip('/')
-# 配置用户名（一般是邮箱）
 email = os.environ.get('EMAIL')
-# 配置用户名对应的密码 和上面的email对应上
 passwd = os.environ.get('PASSWD')
-# server酱
 SCKEY = os.environ.get('SCKEY') or ''
 
 login_page = '{}/auth/login'.format(url)
@@ -29,21 +25,36 @@ def push(title, desp):
     try:
         requests.post('https://sctapi.ftqq.com/{}.send'.format(SCKEY),
                       data={'title': title, 'desp': str(desp)[:500]}, timeout=10)
-        print('推送成功')
-    except Exception as e:
-        print('推送失败:', repr(e))
+    except Exception:
+        pass
+
+
+def analyze_page(html):
+    """打印登录页中与登录/加密/验证码相关的代码行，帮助定位登录机制"""
+    keys = ['login', 'password', 'passwd', 'geetest', 'captcha', 'md5',
+            'sha256', 'sha1', 'encrypt', 'csrf', 'token', 'checkin',
+            'auth', 'ajax', 'verif']
+    lines = html.splitlines()
+    shown = 0
+    for ln in lines:
+        low = ln.lower()
+        if any(k in low for k in keys) and len(ln) < 500:
+            print('  HTML>', ln.strip()[:400])
+            shown += 1
+            if shown >= 25:
+                break
+    if shown == 0:
+        print('  HTML> (未找到相关代码行，页面前500字符:)')
+        print('  HTML>', html[:500].replace(chr(10), ' '))
 
 
 try:
-    # 1) 先 GET 登录页，获取 session cookie（含 CSRF）
     print('获取登录页...')
     r0 = session.get(login_page, headers=header, timeout=20)
-    print('GET /auth/login 状态码:', r0.status_code)
-    snippet = r0.text[:200].replace(chr(10), ' ')
-    print('GET 响应前200字符:', snippet)
+    print('GET 状态码:', r0.status_code)
     print('cookies:', dict(session.cookies))
+    analyze_page(r0.text)
 
-    # 2) 从 cookie 提取 XSRF-TOKEN 作为 CSRF
     csrf = session.cookies.get('XSRF-TOKEN', '') or ''
     try:
         csrf = unquote(csrf)
@@ -54,31 +65,28 @@ try:
     if csrf:
         h['X-CSRF-TOKEN'] = csrf
 
-    # 3) 登录
     print('进行登录...')
     r = session.post(login_url, headers=h,
                      data={'email': email, 'passwd': passwd}, timeout=20)
+    print('登录响应:', r.text[:300].replace(chr(10), ' '))
     try:
         j = r.json()
     except Exception:
         j = {}
-        print('登录响应非JSON, 前200字符:', r.text[:200].replace(chr(10), ' '))
     if j.get('ret') == 1:
         print('登录成功:', j.get('msg'))
     else:
-        msg = j.get('msg') or r.text[:200]
-        print('登录失败:', msg)
-        push('机场签到失败', '登录失败: ' + str(msg))
+        print('登录失败:', j.get('msg', r.text[:200]))
+        push('机场签到失败', '登录失败: ' + str(j.get('msg', r.text[:200])))
         exit(1)
 
-    # 4) 签到
     print('进行签到...')
     r2 = session.post(check_url, headers=h, timeout=20)
+    print('签到响应:', r2.text[:300].replace(chr(10), ' '))
     try:
         j2 = r2.json()
     except Exception:
         j2 = {}
-        print('签到响应非JSON, 前200字符:', r2.text[:200].replace(chr(10), ' '))
     msg2 = j2.get('msg') or r2.text[:200]
     print('签到结果:', msg2)
     push('机场签到', msg2)
