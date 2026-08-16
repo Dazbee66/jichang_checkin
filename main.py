@@ -39,8 +39,8 @@ try:
     print('获取登录页...')
     r0 = session.get(login_page, headers=header, timeout=20)
     print('GET /auth/login 状态码:', r0.status_code)
-    print('GET 响应前200字符:', r0.text[:200].replace('
-', ' '))
+    snippet = r0.text[:200].replace(chr(10), ' ')
+    print('GET 响应前200字符:', snippet)
     print('cookies:', dict(session.cookies))
 
     # 2) 从 cookie 提取 XSRF-TOKEN 作为 CSRF
@@ -62,7 +62,7 @@ try:
         j = r.json()
     except Exception:
         j = {}
-        print('登录响应非JSON, 前200字符:', r.text[:200])
+        print('登录响应非JSON, 前200字符:', r.text[:200].replace(chr(10), ' '))
     if j.get('ret') == 1:
         print('登录成功:', j.get('msg'))
     else:
@@ -78,7 +78,7 @@ try:
         j2 = r2.json()
     except Exception:
         j2 = {}
-        print('签到响应非JSON, 前200字符:', r2.text[:200])
+        print('签到响应非JSON, 前200字符:', r2.text[:200].replace(chr(10), ' '))
     msg2 = j2.get('msg') or r2.text[:200]
     print('签到结果:', msg2)
     push('机场签到', msg2)
