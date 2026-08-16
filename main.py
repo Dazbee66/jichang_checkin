@@ -37,7 +37,11 @@ def push(title, desp):
 try:
     # 1) 先 GET 登录页，获取 session cookie（含 CSRF）
     print('获取登录页...')
-    session.get(login_page, headers=header, timeout=20)
+    r0 = session.get(login_page, headers=header, timeout=20)
+    print('GET /auth/login 状态码:', r0.status_code)
+    print('GET 响应前200字符:', r0.text[:200].replace('
+', ' '))
+    print('cookies:', dict(session.cookies))
 
     # 2) 从 cookie 提取 XSRF-TOKEN 作为 CSRF
     csrf = session.cookies.get('XSRF-TOKEN', '') or ''
